@@ -1,80 +1,190 @@
-#include "vbc_terminal.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <ctype.h>
 
-char *s;
+typedef struct node
+{
+    enum
+    {
+        ADD,
+        MULTI,
+        VAL
+    } type;
+    int val;
+    struct node *l;
+    struct node *r;
+} node;
+
+node *new_node(node n)
+{
+    node *ret = calloc(1, sizeof(n));
+    if (!ret)
+        return (NULL);
+    *ret = n;
+    return (ret);
+}
+
+void destroy_tree(node *n)
+{
+    if (!n)
+        return;
+    if (n->type != VAL)
+    {
+        destroy_tree(n->l);
+        destroy_tree(n->r);
+    }
+    free(n);
+}
 
 void unexpected(char c)
 {
     if (c)
         printf("Unexpected token '%c'\n", c);
     else
-        printf("Unexpected end of file\n");
+        printf("Unexpected end of input\n"); //+++++++++++++++
 }
 
-int ft_product()
+int accept(char **s, char c)
 {
-    int a = ft_factor();
-    int b;
-    while (*s == '*')
+    if (**s == c) //+++++++++++++++
     {
-        s++;
-        b = ft_factor();
-        a = a * b;
+        (*s)++;
+        return (1);
     }
-    return (a);
+    return (0);
 }
 
-int ft_sum()
+int expect(char **s, char c)
 {
-    int sum1 = ft_product();
-    int sum2;
-    while (*s == '+')
-    {
-        s++;
-        sum2 = ft_product();
-        sum1 = sum1 + sum2;
-    }
-    return (sum1);
-}
-int ft_factor()
-{
-    int n = 0;
-    if (isdigit(*s))
-        return (*s++ - '0');
-    while (*s == '(')
-    {
-        s++;
-        n = ft_sum();
-        s++;
-    }
-    return (n);
+    if (accept(s, c))
+        return (1);
+    unexpected(**s);
+    return (0);
 }
 
-int check_input(char *str)
+//+++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+int check_balance(char *s);
+node *parse_number_or_group(char **s);
+node *parse_addition(char **s);
+node *parse_multiplication(char **s);
+
+node *parse_number_or_group(char **s)
 {
-    int par = 0;
-    int i = 0;
-    char last = 0;
-    while (str[i])
+    node *res;
+    node tmp;
+
+    res = NULL;
+    if (**s == '(')
     {
-        if (str[i] == '(')
-            par++;
-        else if (str[i] == ')')
-            par--;
-        else if (!isdigit(str[i]) && str[i] != '+' && str[i] != '*' && str[i] != '(' && str[i] != ')')
-            return (unexpected(str[i]), 1);
-        if (isdigit(str[i]) && isdigit(str[i + 1]))
-            return (unexpected(str[i + 1]), 1);
-        if (isdigit(str[i]) && isdigit(str[i + 1]))
-            return (unexpected(str[i + 1]), 1);
-        last = str[i];
+        (*s)++;
+        res = parse_addition(s); //()がある場合ここで（1+2）をまとめたADDノードにする
+        if (!res || **s != ')')
+        {
+            destroy_tree(res);
+            unexpected(**s);
+            return (NULL);
+        }
+        (*s)++;
+        return (res);
+    }
+    if (isdigit(**s))
+    {
+        tmp.type = VAL;
+        tmp.val = **s - '0';
+        res = new_node(tmp);
+        (*s)++;
+        return (res);
+    }
+    unexpected(**s);
+    return (NULL);
+}
+
+node *parse_addition(char **s)
+{
+    node *left;
+    node *right;
+    node tmp;
+
+    left = parse_multiplication(s);
+    if (!left)
+        return (NULL);
+    while (**s == '+')
+    {
+        (*s)++;
+        right = parse_multiplication(s); // ➺nodeでleft(tmp.type == MULTI tmp.l == 2, tmp.r == 3)が返ってくる
+        if (!right)
+        {
+            destroy_tree(left);
+            return (NULL);
+        }
+        tmp.type = ADD; // imakoko
+        tmp.l = left;
+        tmp.r = right;
+        left = new_node(tmp);
+    }
+    return (left);
+}
+
+node *parse_multiplication(char **s)
+{
+    node *left;
+    node *right;
+    node tmp;
+
+    left = parse_number_or_group(s);
+    if (!left)
+        return (NULL);
+    while (**s == '*')
+    {
+        (*s)++;
+        right = parse_number_or_group(s);
+        if (!right)
+        {
+            destroy_tree(left);
+            return (NULL);
+        }
+        tmp.type = MULTI;
+        tmp.l = left;
+        tmp.r = right;
+        left = new_node(tmp);
+    }
+    return (left);
+}
+
+int check_balance(char *s)
+{
+    int balance;
+    int i;
+
+    balance = 0;
+    i = 0;
+    while (s[i])
+    {
+        if (s[i] == '(')
+            balance++;
+        else if (s[i] == ')')
+        {
+            balance--;
+            if (balance < 0)
+                return (-1);
+        }
         i++;
     }
-    if (par > 0)
-        return (unexpected('('), 1);
-    if (par < 0)
-        return (unexpected(')'), 1);
-    if (last == '+' || last == '*')
-        return (unexpected(0), 1);
+    return (balance);
+}
+
+int eval_tree(node *tree)
+{
+    switch (tree->type)
+    {
+    case ADD:
+        return (eval_tree(tree->l) + eval_tree(tree->r));
+    case MULTI:
+        return (eval_tree(tree->l) * eval_tree(tree->r));
+    case VAL:
+        return (tree->val);
+    }
     return (0);
 }
 
@@ -82,9 +192,11 @@ int main(int argc, char **argv)
 {
     if (argc != 2)
         return (1);
-    if (check_input(argv[1]))
+    if (check_balance(argv[1]) == -1)
+        return (printf("Unexpected token ')'"), 1);
+    node *tree = parse_addition(&argv[1]);
+    if (!tree)
         return (1);
-    s = argv[1];
-    int res = ft_sum();
-    printf("%d\n", res);
+    printf("%d\n", eval_tree(tree));
+    destroy_tree(tree);
 }
