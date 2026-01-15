@@ -84,6 +84,70 @@ node *parse_number_or_group(char **s)
             unexpected(**s);
             return (NULL);
         }
-        ()
+        (*s)++;
+        return(res);
     }
+    if(isdigit(**s))
+    {
+        tmp.type = VAL;
+        tmp.val = **s - '0';
+        res = new_node(tmp);
+        (*s)++;
+        return(res);
+    }
+    unexpected(**s);
+    return(NULL);
 }
+
+node *parse_addition(char **s)
+{
+    node *left;
+    node *right;
+    node tmp;
+
+    left = parse_multiplication(s);
+    if(!left)
+        return(NULL);
+    while(**s == '+')
+    {
+        (*s)++;
+        right = parse_multiplication(s);
+        if(!right)
+        {
+            destroy_tree(left);
+            return(NULL);
+        }
+        tmp.type = ADD;
+        tmp.l = left;
+        tmp.r = right;
+        left = new_node(tmp);
+    }
+    return(left);
+}
+
+node *parse_multiplication(char **s)
+{
+    node *left;
+    node *right;
+    node tmp;
+
+    left = parse_number_or_group(s);
+    if(!left)
+        return(NULL);
+    while(**s == '*')
+    {
+        (*s)++;
+        right = parse_number_or_groups(s);
+        if(!right)
+        {
+            destroy_tree(left);
+            return(NULL);
+        }
+        tmp.type = MULTI;
+        tmp.l = left;
+        tmp.r = right;
+        left = new_node(tmp);
+    }
+    return(left);
+}
+
