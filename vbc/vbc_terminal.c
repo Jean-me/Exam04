@@ -192,11 +192,14 @@ int main(int argc, char **argv)
 {
     if (argc != 2)
         return (1);
-    if (check_balance(argv[1]) == -1)
+        char *input = argv[1];
+    if (check_balance(argv[1]) != 0)
         return (printf("Unexpected token ')'"), 1);
-    node *tree = parse_addition(&argv[1]);
+    node *tree = parse_addition(&input);
     if (!tree)
         return (1);
+    if(!expect(&input,0))
+        return(destroy_tree(tree), 1);
     printf("%d\n", eval_tree(tree));
     destroy_tree(tree);
 }
